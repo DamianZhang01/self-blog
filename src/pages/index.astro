@@ -1,0 +1,211 @@
+---
+import Base from '../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const techPosts = (await getCollection('tech', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 3);
+
+const mediaPosts = (await getCollection('media', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 3);
+
+const base = import.meta.env.BASE_URL;
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+const mediaTypeLabel: Record<string, string> = {
+  book: '书', movie: '影', music: '音', game: '游'
+};
+---
+<Base>
+  <section class="hero">
+    <h1 class="hero-title">无题</h1>
+    <p class="hero-sub">技术的成长，书影音的注脚</p>
+    <div class="hero-divider"></div>
+  </section>
+
+  <div class="columns">
+    <!-- 技术板块 -->
+    <section class="column">
+      <div class="col-header">
+        <h2 class="col-title">技术</h2>
+        <a href={`${base}tech`} class="col-more">全部 →</a>
+      </div>
+      <ul class="post-list">
+        {techPosts.map(post => (
+          <li class="post-item">
+            <a href={`${base}tech/${post.id}`} class="post-link">
+              <span class="post-title">{post.data.title}</span>
+              <span class="post-meta">
+                <time>{formatDate(post.data.date)}</time>
+              </span>
+            </a>
+            {post.data.description && (
+              <p class="post-desc">{post.data.description}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <!-- 书影音板块 -->
+    <section class="column">
+      <div class="col-header">
+        <h2 class="col-title">书影音</h2>
+        <a href={`${base}media`} class="col-more">全部 →</a>
+      </div>
+      <ul class="post-list">
+        {mediaPosts.map(post => (
+          <li class="post-item">
+            <a href={`${base}media/${post.id}`} class="post-link">
+              <span class="post-title">
+                {post.data.mediaType && (
+                  <span class="media-badge">{mediaTypeLabel[post.data.mediaType]}</span>
+                )}
+                {post.data.title}
+              </span>
+              <span class="post-meta">
+                {post.data.rating && <span class="rating">{'·'.repeat(post.data.rating)}</span>}
+                <time>{formatDate(post.data.date)}</time>
+              </span>
+            </a>
+            {post.data.description && (
+              <p class="post-desc">{post.data.description}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .hero {
+    padding: 4rem 0 3rem;
+    text-align: center;
+  }
+
+  .hero-title {
+    font-size: clamp(2rem, 6vw, 3rem);
+    font-weight: 300;
+    letter-spacing: 0.3em;
+    color: var(--text);
+    margin-bottom: 0.8rem;
+  }
+
+  .hero-sub {
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    color: var(--text-faint);
+    letter-spacing: 0.15em;
+    font-weight: 300;
+  }
+
+  .hero-divider {
+    width: 40px;
+    height: 1px;
+    background: var(--border);
+    margin: 2rem auto 0;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    margin-top: 3rem;
+  }
+
+  @media (max-width: 640px) {
+    .columns { grid-template-columns: 1fr; gap: 3rem; }
+  }
+
+  .col-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .col-title {
+    font-size: 0.8rem;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .col-more {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    transition: color 0.2s;
+  }
+  .col-more:hover { color: var(--accent); }
+
+  .post-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+
+  .post-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .post-title {
+    font-size: 0.975rem;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.5;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .post-link:hover .post-title { color: var(--accent); }
+
+  .media-badge {
+    display: inline-block;
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    padding: 0.1em 0.4em;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  .post-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    letter-spacing: 0.03em;
+  }
+
+  .rating {
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    font-size: 0.6rem;
+  }
+
+  .post-desc {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-top: 0.3rem;
+  }
+</style>

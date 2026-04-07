@@ -1,0 +1,186 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('media', ({ data }) => !data.draft);
+  return posts.map(post => ({ params: { id: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const base = import.meta.env.BASE_URL;
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+const mediaTypeLabel: Record<string, string> = {
+  book: '书', movie: '影', music: '音', game: '游'
+};
+---
+<Base title={post.data.title} description={post.data.description}>
+  <article>
+    <header class="article-header">
+      <div class="breadcrumb">
+        <a href={`${base}media`}>书影音</a>
+        <span>/</span>
+        {post.data.mediaType && (
+          <span>{mediaTypeLabel[post.data.mediaType]}</span>
+        )}
+      </div>
+
+      <div class="header-body">
+        {post.data.cover && (
+          <div class="cover-wrap">
+            <img src={post.data.cover} alt={post.data.title} />
+          </div>
+        )}
+        <div class="header-info">
+          <h1 class="article-title">{post.data.title}</h1>
+          {post.data.author && (
+            <p class="meta-line">{post.data.author}{post.data.year && ` · ${post.data.year}`}</p>
+          )}
+          {post.data.rating && (
+            <p class="meta-rating">
+              {'●'.repeat(post.data.rating)}{'○'.repeat(5 - post.data.rating)}
+            </p>
+          )}
+          <div class="article-meta">
+            <time>{formatDate(post.data.date)}</time>
+            {post.data.tags.map(t => (
+              <span class="tag-sm">{t}</span>
+            ))}
+          </div>
+          {post.data.description && (
+            <p class="article-desc">{post.data.description}</p>
+          )}
+          {post.data.doubanId && (
+            <a
+              href={`https://www.douban.com/subject/${post.data.doubanId}/`}
+              target="_blank"
+              rel="noopener"
+              class="douban-link"
+            >
+              豆瓣页面 ↗
+            </a>
+          )}
+        </div>
+      </div>
+    </header>
+
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+</Base>
+
+<style>
+  article { max-width: var(--max-w); margin: 0 auto; }
+
+  .article-header {
+    padding: 3rem 0 2.5rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2.5rem;
+  }
+
+  .breadcrumb {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  .breadcrumb a { color: var(--text-muted); transition: color 0.2s; }
+  .breadcrumb a:hover { color: var(--accent); }
+
+  .header-body {
+    display: flex;
+    gap: 1.8rem;
+    align-items: flex-start;
+  }
+
+  .cover-wrap {
+    flex-shrink: 0;
+    width: 110px;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 2px 4px 12px rgba(46,42,34,0.12);
+  }
+
+  .cover-wrap img {
+    width: 100%;
+    display: block;
+    filter: sepia(0.06) brightness(0.97);
+  }
+
+  .header-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .article-title {
+    font-size: clamp(1.3rem, 4vw, 1.8rem);
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+  }
+
+  .meta-line {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .meta-rating {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+  }
+
+  .article-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+  }
+
+  .tag-sm {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.1em 0.4em;
+    border-radius: 2px;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+  }
+
+  .article-desc {
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+    font-style: italic;
+  }
+
+  .douban-link {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--accent);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+    width: fit-content;
+  }
+  .douban-link:hover { border-color: var(--accent); }
+
+  @media (max-width: 480px) {
+    .header-body { flex-direction: column; }
+    .cover-wrap { width: 90px; }
+  }
+</style>

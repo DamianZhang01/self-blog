@@ -1,0 +1,202 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+}
+const { title, description = '个人博客' } = Astro.props;
+const siteTitle = title ? `${title} — 无题` : '无题';
+const base = import.meta.env.BASE_URL;
+---
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content={description} />
+  <title>{siteTitle}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500&family=Noto+Sans+SC:wght@300;400&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <nav class="nav">
+    <a href={base} class="nav-logo">无题</a>
+    <div class="nav-links">
+      <a href={`${base}tech`}>技术</a>
+      <a href={`${base}media`}>书影音</a>
+    </div>
+  </nav>
+  <main>
+    <slot />
+  </main>
+  <footer class="footer">
+    <span>手记于此</span>
+  </footer>
+</body>
+</html>
+
+<style is:global>
+  :root {
+    /* 《镜子》色系 */
+    --bg:         #f5f0e8;      /* 旧纸米白 */
+    --bg-warm:    #ede6d6;      /* 暖米 */
+    --surface:    #e8e0cc;      /* 羊皮纸 */
+    --border:     #c8bda8;      /* 褪色边框 */
+    --text:       #2e2a22;      /* 深棕黑 */
+    --text-muted: #7a6f5e;      /* 尘色灰棕 */
+    --text-faint: #a89f8c;      /* 淡烟色 */
+    --accent:     #6b7c5e;      /* 棕绿 / 苔色 */
+    --accent-warm:#8b6e4e;      /* 旧木棕 */
+    --fog:        #b8c4c0;      /* 雾灰蓝 */
+
+    --font-serif: 'Noto Serif SC', 'STSong', Georgia, serif;
+    --font-sans:  'Noto Sans SC', 'PingFang SC', sans-serif;
+
+    --max-w: 680px;
+    --nav-h: 56px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { font-size: 16px; scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-serif);
+    font-weight: 300;
+    line-height: 1.8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* ── nav ── */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(245, 240, 232, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    height: var(--nav-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+  }
+
+  .nav-logo {
+    font-size: 1.1rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    color: var(--text);
+    opacity: 0.85;
+    transition: opacity 0.2s;
+  }
+  .nav-logo:hover { opacity: 1; }
+
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 300;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .nav-links a {
+    transition: color 0.2s;
+    position: relative;
+  }
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0; right: 0;
+    height: 1px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transition: transform 0.25s ease;
+    transform-origin: left;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links a:hover::after { transform: scaleX(1); }
+
+  /* ── main ── */
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: calc(var(--max-w) + 4rem);
+    margin: 0 auto;
+    padding: 3rem 2rem 5rem;
+  }
+
+  /* ── footer ── */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 1.5rem 2rem;
+    text-align: center;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── prose (文章正文) ── */
+  .prose {
+    font-size: 1rem;
+    color: var(--text);
+  }
+  .prose h1, .prose h2, .prose h3 {
+    font-weight: 400;
+    line-height: 1.4;
+    margin: 2.5rem 0 1rem;
+    color: var(--text);
+  }
+  .prose h1 { font-size: 1.5rem; }
+  .prose h2 { font-size: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  .prose h3 { font-size: 1.05rem; }
+  .prose p { margin: 1.2rem 0; }
+  .prose a { color: var(--accent); border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+  .prose a:hover { border-color: var(--accent); }
+  .prose blockquote {
+    border-left: 2px solid var(--fog);
+    margin: 1.5rem 0;
+    padding: 0.5rem 0 0.5rem 1.2rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .prose code {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.88em;
+    background: var(--surface);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    color: var(--accent-warm);
+  }
+  .prose pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.2rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+  }
+  .prose pre code { background: none; padding: 0; color: var(--text); }
+  .prose ul, .prose ol { padding-left: 1.5rem; margin: 1rem 0; }
+  .prose li { margin: 0.3rem 0; }
+  .prose hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+  .prose img { max-width: 100%; border-radius: 2px; margin: 1.5rem 0; }
+
+  @media (max-width: 640px) {
+    main { padding: 2rem 1.25rem 4rem; }
+    .nav { padding: 0 1.25rem; }
+  }
+</style>

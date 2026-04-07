@@ -1,0 +1,633 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+// ── 手写 md 文章 ──
+const mdPosts = (await getCollection('media', ({ data }) => !data.draft && data.source !== 'douban'))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+// ── 豆瓣数据 ──
+const raw = readFileSync(join(process.cwd(), 'data/douban.json'), 'utf-8');
+const db = JSON.parse(raw);
+
+const base = import.meta.env.BASE_URL;
+
+// ── 本地封面路径 ──
+const _collator = new Intl.Collator('zh-CN-u-co-pinyin');
+const _bounds = [
+  ['a','啊'],['b','芭'],['c','擦'],['d','搭'],['e','鹅'],
+  ['f','发'],['g','噶'],['h','哈'],['j','击'],['k','喀'],
+  ['l','垃'],['m','妈'],['n','拿'],['o','哦'],['p','啪'],
+  ['q','期'],['r','然'],['s','撒'],['t','塌'],['w','挖'],
+  ['x','昔'],['y','压'],['z','匝'],['z_end','\uFFFF'],
+] as const;
+
+function getInitial(char: string): string {
+  const c = char.charCodeAt(0);
+  if (c >= 65 && c <= 90) return char.toLowerCase();
+  if (c >= 97 && c <= 122) return char;
+  if (c >= 48 && c <= 57) return '0';
+  if (c < 0x4e00 || c > 0x9fa5) return 'other';
+  for (let i = 0; i < _bounds.length - 1; i++) {
+    if (_collator.compare(char, _bounds[i][1]) >= 0 && _collator.compare(char, _bounds[i+1][1]) < 0)
+      return _bounds[i][0];
+  }
+  return 'other';
+}
+
+function buildCoverSrc(id: string, mediaType: string, title: string, coverUrl: string): string {
+  const b = import.meta.env.BASE_URL;
+  if (!coverUrl) return b + 'covers/placeholder.svg';
+  const ext = coverUrl.split('.').pop()?.split('?')[0] || 'webp';
+  const initial = getInitial(title?.[0] || '');
+  return b + `covers/${mediaType}/${initial}/${id}.${ext}`;
+}
+
+// 把豆瓣三类数据统一成一种形状，加 source 字段区分
+const dbMovies = (db.movies || []).map((m: any) => ({ ...m, source: 'douban', mediaType: 'movie' }));
+const dbBooks  = (db.books  || []).map((b: any) => ({ ...b, source: 'douban', mediaType: 'book'  }));
+const dbGames  = (db.games  || []).map((g: any) => ({ ...g, source: 'douban', mediaType: 'game'  }));
+const allDouban = [...dbMovies, ...dbBooks, ...dbGames]
+  .sort((a, b) => new Date(b.markedAt).valueOf() - new Date(a.markedAt).valueOf())
+  .map((item: any) => {
+    if (!item.cover) return { ...item, coverInitial: 'other', coverExt: 'webp' };
+    const ext = item.cover.split('.').pop()?.split('?')[0] || 'webp';
+    const initial = getInitial(item.title?.[0] || '');
+    return { ...item, coverInitial: initial, coverExt: ext };
+  });
+
+// ── 合并标签（豆瓣全量） ──
+const tagCount: Record<string, number> = {};
+allDouban.forEach(item => {
+  (item.tags || []).forEach((t: string) => { tagCount[t] = (tagCount[t] || 0) + 1; });
+});
+const popularTags = Object.entries(tagCount)
+  .filter(([, c]) => c >= 2)
+  .sort((a, b) => b[1] - a[1])
+  .map(([tag, count]) => ({ tag, count }));
+
+const mediaTypeLabel: Record<string, string> = {
+  book: '书', movie: '影', music: '音', game: '游'
+};
+
+function formatDate(s: string) {
+  return (s || '').slice(0, 10);
+}
+
+function getScore(item: any): number | null {
+  return item.halfRating ?? item.rating ?? null;
+}
+
+// 统计数量
+const counts = {
+  movie: dbMovies.length,
+  book:  dbBooks.length,
+  game:  dbGames.length,
+  md:    mdPosts.length,
+};
+---
+<Base title="书影音">
+  <div class="page-header">
+    <div class="header-top">
+      <h1 class="page-title">书影音</h1>
+      <div class="type-counts">
+        <span>影 {counts.movie}</span>
+        <span>书 {counts.book}</span>
+        <span>游 {counts.game}</span>
+        {counts.md > 0 && <span>文 {counts.md}</span>}
+      </div>
+    </div>
+    <p class="page-sub">所读、所看、所玩 · 同步自豆瓣</p>
+  </div>
+
+  <!-- 控制栏：标签筛选 + 视图切换 -->
+  <div class="controls">
+    <div class="tag-filter" id="tagFilter">
+      <button class="tag-btn active" data-tag="" data-type="">全部</button>
+      <button class="tag-btn" data-tag="" data-type="movie">影</button>
+      <button class="tag-btn" data-tag="" data-type="book">书</button>
+      <button class="tag-btn" data-tag="" data-type="game">游</button>
+      <span class="divider">|</span>
+      {popularTags.slice(0, 20).map(({ tag, count }) => (
+        <button class="tag-btn" data-tag={tag} data-type="">
+          {tag}<span class="tag-count">{count}</span>
+        </button>
+      ))}
+    </div>
+    <div class="view-toggle" id="viewToggle">
+      <button class="view-btn active" data-view="list" title="列表">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <rect x="0" y="2" width="16" height="2" rx="1"/>
+          <rect x="0" y="7" width="16" height="2" rx="1"/>
+          <rect x="0" y="12" width="16" height="2" rx="1"/>
+        </svg>
+      </button>
+      <button class="view-btn" data-view="grid" title="横铺">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <rect x="0" y="0" width="7" height="7" rx="1"/>
+          <rect x="9" y="0" width="7" height="7" rx="1"/>
+          <rect x="0" y="9" width="7" height="7" rx="1"/>
+          <rect x="9" y="9" width="7" height="7" rx="1"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 手写 md 文章（始终显示在顶部） -->
+  {mdPosts.length > 0 && (
+    <section class="md-section" id="mdSection">
+      <div class="section-label">长文</div>
+      <ul class="md-list">
+        {mdPosts.map(post => (
+          <li>
+            <a href={`${base}media/${post.id}`} class="md-item">
+              {post.data.cover && (
+                <img src={post.data.cover} alt={post.data.title} referrerpolicy="no-referrer" />
+              )}
+              <div class="md-info">
+                <span class="md-title">{post.data.title}</span>
+                <span class="md-meta">
+                  {post.data.mediaType && <span class="badge">{mediaTypeLabel[post.data.mediaType]}</span>}
+                  <time>{post.data.date.toISOString().slice(0,10)}</time>
+                </span>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  <!-- 豆瓣条目 -->
+  <ul class="item-container list-view" id="itemContainer">
+    {allDouban.map(item => {
+      const score = getScore(item);
+      const full  = score ? Math.floor(score) : 0;
+      const half  = score ? (score % 1 >= 0.5) : false;
+      const empty = score ? (5 - full - (half ? 1 : 0)) : 0;
+      const detailUrl = `${base}media/douban/${item.mediaType}/${item.id}`;
+      return (
+        <li
+          class="db-item"
+          data-tags={JSON.stringify(item.tags || [])}
+          data-type={item.mediaType}
+        >
+          <!-- 列表视图 -->
+          <a href={detailUrl} class="list-card">
+            <div class="list-cover">
+              <img
+                src={item.cover ? `${import.meta.env.BASE_URL}covers/${item.mediaType}/${item.coverInitial}/${item.id}.${item.coverExt}` : `${import.meta.env.BASE_URL}covers/placeholder.svg`}
+                alt={item.title}
+                loading="lazy"
+                onerror={`this.onerror=null;this.src='${base}covers/placeholder.svg'`}
+              />
+            </div>
+            <div class="list-body">
+              <div class="list-head">
+                <span class="item-badge">{mediaTypeLabel[item.mediaType]}</span>
+                <h3 class="item-title">{item.title}</h3>
+                {(item.year || item.pubdate) && (
+                  <span class="item-year">{item.year || (item.pubdate || '').slice(0, 4)}</span>
+                )}
+              </div>
+              {(item.directors?.length > 0 || item.author) && (
+                <p class="item-sub">
+                  {item.directors?.join(' / ') || item.author}
+                </p>
+              )}
+              {score !== null && (
+                <div class="star-row" title={`${score}`}>
+                  {'★'.repeat(full)}
+                  {half && <span class="half-star">★</span>}
+                  {'☆'.repeat(empty)}
+                  <span class="score-num">{score}</span>
+                </div>
+              )}
+              {item.comment && (
+                <p class="item-comment">{item.comment}</p>
+              )}
+              <div class="item-footer">
+                {(item.hashTags || []).map((t: string) => (
+                  <span class="inline-tag">{t}</span>
+                ))}
+                <time class="item-date">{formatDate(item.markedAt)}</time>
+              </div>
+            </div>
+          </a>
+
+          <!-- 横铺视图 -->
+          <a href={detailUrl} class="grid-card">
+            <div class="grid-cover">
+              <img
+                src={item.cover ? `${import.meta.env.BASE_URL}covers/${item.mediaType}/${item.coverInitial}/${item.id}.${item.coverExt}` : `${import.meta.env.BASE_URL}covers/placeholder.svg`}
+                alt={item.title}
+                loading="lazy"
+                onerror={`this.onerror=null;this.src='${base}covers/placeholder.svg'`}
+              />
+              {score !== null && (
+                <div class="grid-score">{score}</div>
+              )}
+            </div>
+            <div class="grid-body">
+              <h3 class="item-title">{item.title}</h3>
+              {(item.year || item.pubdate) && (
+                <span class="item-year">{item.year || (item.pubdate || '').slice(0, 4)}</span>
+              )}
+              {score !== null && (
+                <div class="star-row small" title={`${score}`}>
+                  {'★'.repeat(full)}
+                  {half && <span class="half-star">★</span>}
+                  {'☆'.repeat(empty)}
+                </div>
+              )}
+            </div>
+          </a>
+        </li>
+      );
+    })}
+  </ul>
+</Base>
+
+<script>
+  const filterBar  = document.getElementById('tagFilter')!;
+  const container  = document.getElementById('itemContainer')!;
+  const viewToggle = document.getElementById('viewToggle')!;
+  const mdSection  = document.getElementById('mdSection');
+
+  let activeTag  = '';
+  let activeType = '';
+
+  // ── 标签 / 类型筛选 ──
+  filterBar.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest('.tag-btn') as HTMLButtonElement | null;
+    if (!btn) return;
+    filterBar.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeTag  = btn.dataset.tag  || '';
+    activeType = btn.dataset.type || '';
+    applyFilter();
+  });
+
+  function applyFilter() {
+    container.querySelectorAll<HTMLLIElement>('.db-item').forEach(item => {
+      const tags: string[] = JSON.parse(item.dataset.tags || '[]');
+      const type = item.dataset.type || '';
+      const tagOk  = !activeTag  || tags.includes(activeTag);
+      const typeOk = !activeType || type === activeType;
+      item.style.display = (tagOk && typeOk) ? '' : 'none';
+    });
+    // 筛选非全部时隐藏长文区
+    if (mdSection) mdSection.style.display = (activeTag || activeType) ? 'none' : '';
+  }
+
+  // ── 视图切换 ──
+  viewToggle.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest('.view-btn') as HTMLButtonElement | null;
+    if (!btn) return;
+    viewToggle.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view!;
+    container.classList.toggle('list-view', view === 'list');
+    container.classList.toggle('grid-view', view === 'grid');
+    localStorage.setItem('mediaView', view);
+  });
+
+  // 恢复上次视图
+  const saved = localStorage.getItem('mediaView');
+  if (saved === 'grid') {
+    viewToggle.querySelector<HTMLButtonElement>('[data-view="grid"]')?.click();
+  }
+</script>
+
+<style>
+  /* ── header ── */
+  .page-header {
+    padding: 3rem 0 1.5rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    gap: 1.2rem;
+    margin-bottom: 0.4rem;
+  }
+  .page-title {
+    font-size: 1.6rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+  }
+  .type-counts {
+    display: flex;
+    gap: 0.8rem;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+  }
+  .page-sub {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-faint);
+    letter-spacing: 0.08em;
+  }
+
+  /* ── controls ── */
+  .controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .tag-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    flex: 1;
+    align-items: center;
+  }
+  .divider {
+    color: var(--border);
+    margin: 0 0.1rem;
+    font-size: 0.8rem;
+  }
+  .tag-btn {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    padding: 0.25em 0.65em;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+    white-space: nowrap;
+  }
+  .tag-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .tag-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .tag-count { font-size: 0.62rem; opacity: 0.7; }
+
+  .view-toggle {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+  .view-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--bg);
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .view-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .view-btn.active { background: var(--surface); color: var(--text); border-color: var(--border); }
+
+  /* ── 手写 md ── */
+  .md-section { margin-bottom: 2rem; }
+  .section-label {
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--bg-warm);
+  }
+  .md-list { list-style: none; display: flex; flex-direction: column; gap: 0.1rem; }
+  .md-item {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--bg-warm);
+  }
+  .md-item img { width: 32px; height: 46px; object-fit: cover; border-radius: 1px; }
+  .md-info { display: flex; flex-direction: column; gap: 0.2rem; }
+  .md-title { font-size: 0.9rem; color: var(--text); transition: color 0.2s; }
+  .md-item:hover .md-title { color: var(--accent); }
+  .md-meta { display: flex; align-items: center; gap: 0.4rem; font-family: var(--font-sans); font-size: 0.72rem; color: var(--text-faint); }
+  .badge {
+    font-family: var(--font-sans);
+    font-size: 0.62rem;
+    padding: 0.05em 0.35em;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-faint);
+  }
+
+  /* ── 容器 ── */
+  .item-container { list-style: none; }
+
+  /* ═══ 列表视图 ═══ */
+  .list-view .grid-card { display: none; }
+  .list-view .db-item { border-bottom: 1px solid var(--bg-warm); }
+
+  .list-card {
+    display: flex;
+    gap: 1rem;
+    padding: 0.9rem 0;
+  }
+  .list-card:hover .item-title { color: var(--accent); }
+
+  .list-cover {
+    flex-shrink: 0;
+    width: 52px;
+    height: 74px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .list-cover img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    filter: sepia(0.05) brightness(0.97);
+  }
+
+  .list-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .list-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  /* ═══ 横铺视图 ═══ */
+  .grid-view .list-card { display: none; }
+  .grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 1rem;
+  }
+  .grid-view .db-item { border: none; }
+
+  .grid-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .grid-card:hover .item-title { color: var(--accent); }
+
+  .grid-cover {
+    position: relative;
+    aspect-ratio: 2/3;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: 1px 2px 8px rgba(46,42,34,0.1);
+  }
+  .grid-cover img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    filter: sepia(0.05) brightness(0.97);
+    transition: filter 0.25s;
+  }
+  .grid-card:hover .grid-cover img { filter: sepia(0) brightness(1); }
+
+  .grid-score {
+    position: absolute;
+    bottom: 4px;
+    right: 5px;
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    color: #fff;
+    background: rgba(46,42,34,0.55);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+    backdrop-filter: blur(2px);
+  }
+
+  .grid-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0 0.1rem;
+  }
+
+  /* ── 公共元素 ── */
+  .cover-ph {
+    width: 100%; height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-serif);
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 4px;
+    line-height: 1.3;
+  }
+
+  .item-badge {
+    font-family: var(--font-sans);
+    font-size: 0.6rem;
+    padding: 0.05em 0.35em;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  .item-title {
+    font-size: 0.88rem;
+    font-weight: 400;
+    color: var(--text);
+    transition: color 0.2s;
+    line-height: 1.4;
+  }
+
+  .item-year {
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  .item-sub {
+    font-family: var(--font-sans);
+    font-size: 0.73rem;
+    color: var(--text-muted);
+  }
+
+  .star-row {
+    display: flex;
+    align-items: center;
+    gap: 0.05em;
+    font-size: 0.65rem;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+  .star-row.small { font-size: 0.55rem; }
+
+  .half-star {
+    display: inline-block;
+    overflow: hidden;
+    width: 0.5em;
+  }
+
+  .score-num {
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    color: var(--text-faint);
+    margin-left: 0.3em;
+    letter-spacing: 0;
+  }
+
+  .item-comment {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.65;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .item-footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.15rem;
+  }
+
+  .inline-tag {
+    font-family: var(--font-sans);
+    font-size: 0.6rem;
+    color: var(--fog);
+    background: var(--bg-warm);
+    border: 1px solid var(--border);
+    padding: 0.05em 0.35em;
+    border-radius: 2px;
+  }
+
+  .item-date {
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    color: var(--text-faint);
+    margin-left: auto;
+  }
+
+  @media (max-width: 480px) {
+    .grid-view { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+  }
+</style>

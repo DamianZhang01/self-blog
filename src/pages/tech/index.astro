@@ -1,0 +1,182 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('tech', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+const base = import.meta.env.BASE_URL;
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// 收集所有标签
+const tagCount: Record<string, number> = {};
+posts.forEach(p => p.data.tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+const tags = Object.keys(tagCount).sort();
+---
+<Base title="技术">
+  <div class="page-header">
+    <h1 class="page-title">技术</h1>
+    <p class="page-sub">成长、探索、记录</p>
+  </div>
+
+  {tags.length > 0 && (
+    <div class="tag-bar">
+      {tags.map(tag => (
+        <span class="tag">{tag} <em>{tagCount[tag]}</em></span>
+      ))}
+    </div>
+  )}
+
+  <ul class="post-list">
+    {posts.map(post => (
+      <li class="post-item">
+        <a href={`${base}tech/${post.id}`} class="post-link">
+          <div class="post-main">
+            <span class="post-title">{post.data.title}</span>
+            {post.data.description && (
+              <span class="post-desc">{post.data.description}</span>
+            )}
+          </div>
+          <div class="post-side">
+            <time class="post-date">{formatDate(post.data.date)}</time>
+            {post.data.tags.length > 0 && (
+              <div class="post-tags">
+                {post.data.tags.map(t => <span class="tag-sm">{t}</span>)}
+              </div>
+            )}
+          </div>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Base>
+
+<style>
+  .page-header {
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.6rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    margin-bottom: 0.4rem;
+  }
+
+  .page-sub {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-faint);
+    letter-spacing: 0.1em;
+  }
+
+  .tag-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .tag {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.2em 0.6em;
+    border-radius: 2px;
+    letter-spacing: 0.04em;
+    cursor: default;
+  }
+
+  .tag em {
+    font-style: normal;
+    color: var(--text-faint);
+    margin-left: 0.3em;
+  }
+
+  .post-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .post-item {
+    border-bottom: 1px solid var(--bg-warm);
+  }
+
+  .post-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    padding: 1.4rem 0;
+    transition: background 0.15s;
+  }
+
+  .post-link:hover .post-title { color: var(--accent); }
+
+  .post-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    flex: 1;
+  }
+
+  .post-title {
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--text);
+    transition: color 0.2s;
+    line-height: 1.5;
+  }
+
+  .post-desc {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .post-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .post-date {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  .post-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    justify-content: flex-end;
+  }
+
+  .tag-sm {
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    color: var(--text-faint);
+    background: var(--bg-warm);
+    padding: 0.1em 0.4em;
+    border-radius: 2px;
+  }
+
+  @media (max-width: 540px) {
+    .post-link { flex-direction: column; gap: 0.5rem; }
+    .post-side { align-items: flex-start; }
+    .post-tags { justify-content: flex-start; }
+  }
+</style>

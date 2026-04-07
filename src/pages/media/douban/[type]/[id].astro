@@ -1,0 +1,318 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+export async function getStaticPaths() {
+  const raw = readFileSync(join(process.cwd(), 'data/douban.json'), 'utf-8');
+  const db = JSON.parse(raw);
+
+  const paths: any[] = [];
+  const movies = (db.movies || []).map((m: any) => ({ ...m, mediaType: 'movie' }));
+  const books  = (db.books  || []).map((b: any) => ({ ...b, mediaType: 'book'  }));
+  const games  = (db.games  || []).map((g: any) => ({ ...g, mediaType: 'game'  }));
+
+  for (const item of [...movies, ...books, ...games]) {
+    if (!item.id) continue;
+    paths.push({ params: { type: item.mediaType, id: item.id }, props: { item } });
+  }
+  return paths;
+}
+
+const { item } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+const score = item.halfRating ?? item.rating ?? null;
+const full  = score ? Math.floor(score) : 0;
+const half  = score ? (score % 1 >= 0.5) : false;
+const empty = score ? (5 - full - (half ? 1 : 0)) : 0;
+
+// 本地封面路径
+const _collator = new Intl.Collator('zh-CN-u-co-pinyin');
+const _bounds = [
+  ['a','啊'],['b','芭'],['c','擦'],['d','搭'],['e','鹅'],
+  ['f','发'],['g','噶'],['h','哈'],['j','击'],['k','喀'],
+  ['l','垃'],['m','妈'],['n','拿'],['o','哦'],['p','啪'],
+  ['q','期'],['r','然'],['s','撒'],['t','塌'],['w','挖'],
+  ['x','昔'],['y','压'],['z','匝'],['z_end','\uFFFF'],
+] as const;
+function _getInitial(char: string): string {
+  const c = char.charCodeAt(0);
+  if (c >= 65 && c <= 90) return char.toLowerCase();
+  if (c >= 97 && c <= 122) return char;
+  if (c >= 48 && c <= 57) return '0';
+  if (c < 0x4e00 || c > 0x9fa5) return 'other';
+  for (let i = 0; i < _bounds.length - 1; i++) {
+    if (_collator.compare(char, _bounds[i][1]) >= 0 && _collator.compare(char, _bounds[i+1][1]) < 0)
+      return _bounds[i][0];
+  }
+  return 'other';
+}
+const coverSrc = item.cover
+  ? `${base}covers/${item.mediaType}/${_getInitial(item.title?.[0] || '')}/${item.id}.${item.cover.split('.').pop()?.split('?')[0] || 'webp'}`
+  : `${base}covers/placeholder.svg`;
+
+const mediaTypeLabel: Record<string, string> = {
+  book: '书', movie: '影', music: '音', game: '游'
+};
+
+function formatDate(s: string) {
+  if (!s) return '';
+  return new Date(s).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+---
+<Base title={item.title}>
+  <article>
+    <div class="breadcrumb">
+      <a href={`${base}media`}>书影音</a>
+      <span>/</span>
+      <span>{mediaTypeLabel[item.mediaType] || item.mediaType}</span>
+    </div>
+
+    <div class="detail-header">
+      <div class="cover-wrap">
+        <img
+          src={coverSrc}
+          alt={item.title}
+          onerror={`this.onerror=null;this.src='${base}covers/placeholder.svg'`}
+        />
+      </div>
+
+      <div class="detail-info">
+        <h1 class="detail-title">{item.title}</h1>
+        {item.originalTitle && item.originalTitle !== item.title && (
+          <p class="original-title">{item.originalTitle}</p>
+        )}
+
+        <dl class="meta-list">
+          {item.directors?.length > 0 && (
+            <>
+              <dt>导演</dt>
+              <dd>{item.directors.join(' / ')}</dd>
+            </>
+          )}
+          {item.author && (
+            <>
+              <dt>作者</dt>
+              <dd>{item.author}</dd>
+            </>
+          )}
+          {(item.year || item.pubdate) && (
+            <>
+              <dt>年份</dt>
+              <dd>{item.year || item.pubdate}</dd>
+            </>
+          )}
+          {item.genres?.length > 0 && (
+            <>
+              <dt>类型</dt>
+              <dd>{item.genres.join(' / ')}</dd>
+            </>
+          )}
+          {item.publisher && (
+            <>
+              <dt>出版</dt>
+              <dd>{item.publisher}</dd>
+            </>
+          )}
+        </dl>
+
+        {score !== null && (
+          <div class="score-block">
+            <div class="star-row" title={`${score}`}>
+              {'★'.repeat(full)}
+              {half && <span class="half-star">★</span>}
+              {'☆'.repeat(empty)}
+            </div>
+            <span class="score-num">{score} / 5</span>
+          </div>
+        )}
+
+        {item.hashTags?.length > 0 && (
+          <div class="hash-tags">
+            {item.hashTags.map((t: string) => (
+              <span class="inline-tag">{t}</span>
+            ))}
+          </div>
+        )}
+
+        <div class="detail-meta">
+          {item.markedAt && <time>标记于 {formatDate(item.markedAt)}</time>}
+          <a href={item.doubanUrl} target="_blank" rel="noopener" class="douban-link">豆瓣页面 ↗</a>
+        </div>
+      </div>
+    </div>
+
+    {item.comment && (
+      <div class="comment-block">
+        <div class="comment-label">短评</div>
+        <p class="comment-text">{item.comment}</p>
+      </div>
+    )}
+  </article>
+</Base>
+
+<style>
+  article {
+    max-width: var(--max-w);
+    margin: 0 auto;
+    padding-top: 2.5rem;
+  }
+
+  .breadcrumb {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    margin-bottom: 2rem;
+  }
+  .breadcrumb a { color: var(--text-muted); transition: color 0.2s; }
+  .breadcrumb a:hover { color: var(--accent); }
+
+  .detail-header {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cover-wrap {
+    flex-shrink: 0;
+    width: 130px;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 2px 4px 16px rgba(46,42,34,0.14);
+  }
+  .cover-wrap img {
+    width: 100%;
+    display: block;
+    filter: sepia(0.05) brightness(0.97);
+  }
+
+  .detail-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .detail-title {
+    font-size: clamp(1.2rem, 3.5vw, 1.7rem);
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+  }
+
+  .original-title {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .meta-list {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 0.8rem;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+  }
+  .meta-list dt { color: var(--text-faint); }
+  .meta-list dd { color: var(--text-muted); }
+
+  .score-block {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.25rem;
+  }
+
+  .star-row {
+    display: flex;
+    align-items: center;
+    gap: 0.05em;
+    font-size: 0.9rem;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    line-height: 1;
+  }
+
+  .half-star {
+    display: inline-block;
+    overflow: hidden;
+    width: 0.5em;
+  }
+
+  .score-num {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .hash-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .inline-tag {
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    color: var(--fog);
+    background: var(--bg-warm);
+    border: 1px solid var(--border);
+    padding: 0.1em 0.4em;
+    border-radius: 2px;
+  }
+
+  .detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    margin-top: auto;
+  }
+
+  .douban-link {
+    color: var(--accent);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .douban-link:hover { border-color: var(--accent); }
+
+  /* ── 短评 ── */
+  .comment-block {
+    padding: 1.5rem;
+    background: var(--bg-warm);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  .comment-label {
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+  }
+
+  .comment-text {
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    line-height: 1.9;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  @media (max-width: 480px) {
+    .detail-header { flex-direction: column; }
+    .cover-wrap { width: 100px; }
+  }
+</style>
